@@ -11,11 +11,12 @@ code
 
 code at 0100h ; Init address
 INIT:
-    mov     TMOD, #01h       ; Timer0 as 16-bit counter
-    mov     IE, #82h         ; Enable T0 interrupts
-    mov     SP, #70h
-    mov     PSW, #00h
+    mov     TMOD,#01h        ; Timer0 as 16-bit counter
+    mov     IE,#82h          ; Enable T0 interrupts
+    mov     SP,#70h
+    mov     PSW,#00h
     lcall   RELOAD_T0
+    lcall   INIT_7SEG_CONST
     ljmp    LOOP
 code
 
@@ -24,12 +25,26 @@ LOOP:
     ljmp    LOOP
 
 RELOAD_T0:
-    mov     TCON, #00h       ; T0_OFF
-    mov     TH0, #0AAh
-    mov     TL0, #55h
-    mov     TCON, #10h       ; T0_ON    
+    mov     TCON,#00h        ; T0_OFF
+    mov     TH0,#0AAh
+    mov     TL0,#55h
+    mov     TCON,#10h        ; T0_ON    
     ret
 end
+
+INIT_7SEG_CONST:
+; bit0: A
+    mov     60h,#C0h         ; 0
+    mov     61h,#F9h         ; 1
+    mov     62h,#A4h         ; 2
+    mov     63h,#B0h         ; 3
+    mov     64h,#99h         ; 4
+    mov     65h,#92h         ; 5
+    mov     66h,#82h         ; 6
+    mov     67h,#F8h         ; 7
+    mov     68h,#80h         ; 8
+    mov     69h,#90h         ; 9
+    ret
 
 ; Cheat sheet
 ;
