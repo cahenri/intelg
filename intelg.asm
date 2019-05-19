@@ -1,5 +1,19 @@
 ; compiled using ride7
 $include(REG51.inc)
+; Fixed memory functions:
+; 30h -> Display0 (Left-most, BCD value)
+; 31h -> Display1 (BCD value)
+; 32h -> Display2 (BCD value)
+; 33h -> FREQ (16bit)
+; 35h -> 
+; Hardware mappings:
+; PORT0.0 ... PORT0.6: display output
+; PORT1.0: Display0 common (ON when zero)
+; PORT1.1: Display1 common (ON when zero)
+; PORT1.2: Display2 common (ON when zero)
+; PORT1.3: Button0
+; PORT1.4: Button1
+; PORT1.5: Button2
 
 code at 0 ; Reset address
     ljmp    INIT
@@ -122,6 +136,61 @@ DIVFREQ_RL_1_QUO:
     ;
     djnz    5Ch,DIVFREQ_0
     ; Return value in 6Eh (16bit)
+    ret
+
+BIN10_BCD:
+; double-dabble optimized for 10 bit numbers 
+; Pass parameter to 50h before calling this func
+    mov     5Ah,#06h
+BIN10_BCD_INIT:
+    lcall   BIN10_BCD_RLC
+    djnz    5Ah,BIN10_BCD_INIT
+
+BIN10_BCD_LOOP:
+    mov     5Ah,#0Ah
+    lcall   BIN10_BCD_RLC
+    ;
+    mov     A,52h
+    rlc     A
+    mov     52h,A
+    ;
+    mov     A,53h
+    rlc     A
+    mov     53h,A
+    ;
+    mov     R0,#52h
+    lcall   BIN10_BCD_ADJ
+    ;
+    mov     R0,#53h
+    lcall   BIN10_BCD_ADJ
+    ;
+    djnz    5Ah,BIN10_BCD_LOOP
+    ; Return value in 52h and 53h
+    ret
+;
+BIN10_BCD_ADJ:
+    mov     A,@R0
+    add     A,#03h
+    jnb     ACC.3,BIN10_BCD_ADJ_SKIP0
+    mov     @R0,A
+BIN10_BCD_ADJ_SKIP0:
+    mov     A,@R0
+    add     A,#30h
+    jnb     ACC.7,BIN10_BCD_ADJ_SKIP1
+    mov     @R0,A
+BIN10_BCD_ADJ_SKIP1:
+    ret
+;
+BIN10_BCD_RLC:
+    mov     A,50h
+    clr     C
+    rlc     A
+    mov     50h,A
+    ;
+    mov     A,51h
+    rlc     A
+    mov     51h,A
+    ;
     ret
 
 ; Cheat sheet
