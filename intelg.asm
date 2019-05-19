@@ -56,6 +56,74 @@ INIT_7SEG_CONST:
     mov     69h,#90h         ; 9
     ret
 
+DIVFREQ:
+; Operation performed by this function:
+; 1000/FREQ
+;
+; The period for FREQ is definded by NCONT*0.1ms
+; NCONT = 10 * (1000/FREQ)
+; 1000d = 0b 0000 0011 1110 1000
+; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
+; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
+; 6Eh -> QUO[CIENT] (16bit)
+; 50h-59h -> general purpose
+    mov     6Ah,#FAh
+    mov     6Eh,#00h
+    mov     6Fh,#00h
+    mov     50h,#00h         ; DIVID will be rotated here
+    mov     51h,#00h
+
+    mov     5Ch,#0Ah
+DIVFREQ_0:
+    ; Rotate DIVID into 50h:
+    mov     A,6Ah
+    clr     C
+    rlc     A
+    mov     6Ah,A
+    ;
+    mov     A,50h
+    rlc     A
+    mov     50h,A
+    mov     A,51h
+    rlc     A
+    mov     51h,A
+    ; SUBB 50h,DIVIS(6Ch) if 50h>DIVIS
+    mov     A,51h
+    clr     C
+    subb    A,6Dh
+    jnz     CHECK_IF_GREATER
+    mov     A,50h
+    clr     C
+    subb    A,6Ch
+CHECK_IF_GREATER:
+    JC      DIVFREQ_RL_0_QUO ; if(C==1): DIVS is greater
+    ;
+    mov     A,50h
+    clr     C
+    subb    A,6Ch
+    mov     50h,A
+    ;
+    mov     A,51h
+    subb    A,6Dh
+    mov     51h,A
+    ;
+    setb    C
+    sjmp    DIVFREQ_RL_1_QUO
+DIVFREQ_RL_0_QUO:
+    clr     C
+DIVFREQ_RL_1_QUO:
+    mov     A,6Eh
+    rlc     A
+    mov     6Eh,A
+    ;
+    mov     A,6Fh
+    rlc     A
+    mov     6Fh,A
+    ;
+    djnz    5Ch,DIVFREQ_0
+    ; Return value in 6Eh (16bit)
+    ret
+
 ; Cheat sheet
 ;
 ; TCON
