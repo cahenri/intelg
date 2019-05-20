@@ -12,6 +12,17 @@ $include(REG51.inc)
 ; 3Ah -> button_en cont
 ; 3Bh -> display_en cont
 ; 3Ch -> scan_cont
+; 60h -> _7seg_0
+; 61h -> _7seg_1
+; 62h -> _7seg_2
+; 63h -> _7seg_3
+; 64h -> _7seg_4
+; 65h -> _7seg_5
+; 66h -> _7seg_6
+; 67h -> _7seg_7
+; 68h -> _7seg_8
+; 69h -> _7seg_9
+; 6Ah ... 6Fh -> used as arguments for functions
 ;
 ; 3Eh -> W_TEMP
 ; 3Fh -> system flags
@@ -92,7 +103,6 @@ RELOAD_T0:
     mov     TL0,#71h
     mov     TCON,#10h        ; T0_ON    
     ret
-end
 
 BUTTOND:
 ; 35h: button_mask
@@ -204,46 +214,45 @@ DIVFREQ:
 ; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
 ; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
 ; 6Eh -> QUO[CIENT] (16bit)
-; 50h-59h -> general purpose
     mov     6Ah,#FAh
     mov     6Eh,#00h
     mov     6Fh,#00h
-    mov     50h,#00h         ; DIVID will be rotated here
-    mov     51h,#00h
+    mov     R6,#00h         ; DIVID will be rotated here
+    mov     R7,#00h
 
-    mov     5Ch,#0Ah
+    mov     R5,#0Ah
 DIVFREQ_0:
-    ; Rotate DIVID into 50h:
+    ; Rotate DIVID into R6:
     mov     A,6Ah
     clr     C
     rlc     A
     mov     6Ah,A
     ;
-    mov     A,50h
+    mov     A,R6
     rlc     A
-    mov     50h,A
-    mov     A,51h
+    mov     R6,A
+    mov     A,R7
     rlc     A
-    mov     51h,A
-    ; SUBB 50h,DIVIS(6Ch) if 50h>DIVIS
-    mov     A,51h
+    mov     R7,A
+    ; SUBB R6,DIVIS(6Ch) if R6>DIVIS
+    mov     A,R7
     clr     C
     subb    A,6Dh
     jnz     CHECK_IF_GREATER
-    mov     A,50h
+    mov     A,R6
     clr     C
     subb    A,6Ch
 CHECK_IF_GREATER:
     JC      DIVFREQ_RL_0_QUO ; if(C==1): DIVS is greater
     ;
-    mov     A,50h
+    mov     A,R6
     clr     C
     subb    A,6Ch
-    mov     50h,A
+    mov     R6,A
     ;
-    mov     A,51h
+    mov     A,R7
     subb    A,6Dh
-    mov     51h,A
+    mov     R7,A
     ;
     setb    C
     sjmp    DIVFREQ_RL_1_QUO
@@ -258,38 +267,38 @@ DIVFREQ_RL_1_QUO:
     rlc     A
     mov     6Fh,A
     ;
-    djnz    5Ch,DIVFREQ_0
+    djnz    R5,DIVFREQ_0
     ; Return value in 6Eh (16bit)
     ret
 
 BIN10_BCD:
 ; double-dabble optimized for 10 bit numbers 
-; Pass parameter to 50h before calling this func
-    mov     5Ah,#06h
+; Pass parameter to 6Ah before calling this func
+    mov     R7,#06h
 BIN10_BCD_INIT:
     lcall   BIN10_BCD_RLC
-    djnz    5Ah,BIN10_BCD_INIT
-
+    djnz    R7,BIN10_BCD_INIT
+;
 BIN10_BCD_LOOP:
-    mov     5Ah,#0Ah
+    mov     R7,#0Ah
     lcall   BIN10_BCD_RLC
     ;
-    mov     A,52h
+    mov     A,6Ch
     rlc     A
-    mov     52h,A
+    mov     6Ch,A
     ;
-    mov     A,53h
+    mov     A,6Dh
     rlc     A
-    mov     53h,A
+    mov     6Dh,A
     ;
-    mov     R0,#52h
+    mov     R0,#6Ch
     lcall   BIN10_BCD_ADJ
     ;
-    mov     R0,#53h
+    mov     R0,#6Dh
     lcall   BIN10_BCD_ADJ
     ;
-    djnz    5Ah,BIN10_BCD_LOOP
-    ; Return value in 52h and 53h
+    djnz    R7,BIN10_BCD_LOOP
+    ; Return value in 6Ch and 6Dh
     ret
 ;
 BIN10_BCD_ADJ:
@@ -306,17 +315,18 @@ BIN10_BCD_ADJ_SKIP1:
     ret
 ;
 BIN10_BCD_RLC:
-    mov     A,50h
+    mov     A,6Ah
     clr     C
     rlc     A
-    mov     50h,A
+    mov     6Ah,A
     ;
-    mov     A,51h
+    mov     A,6Bh
     rlc     A
-    mov     51h,A
+    mov     6Bh,A
     ;
     ret
 
+end
 ; Cheat sheet
 ;
 ; TCON
