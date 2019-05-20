@@ -10,17 +10,21 @@ $include(REG51.inc)
 ; 37h -> pdone
 ; 39h -> xpress
 ; 3Ah -> button_en cont
+; 3Bh -> display_en cont
+; 3Ch -> scan_cont
 ;
-; 3Fh -> user flags
+; 3Eh -> W_TEMP
+; 3Fh -> system flags
 ; 3Fh.0 -> buttond_en flag
+; 3Fh.1 -> scan_en flag
 ; Hardware mappings:
 ; PORT0.0 ... PORT0.6: display output
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
 ; PORT1.2: Display2 common (ON when zero)
-; PORT1.3: Button0
-; PORT1.4: Button1
-; PORT1.5: Button2
+; PORT1.4: Button0
+; PORT1.5: Button1
+; PORT1.6: Button2
 
 code at 0 ; Reset address
     ljmp    INIT
@@ -33,6 +37,8 @@ code
 code at 0040h
 T0_INT:
     lcall   RELOAD_T0
+    mov     3Eh,A            ; Save A to W_TEMP
+
     ; Enable BUTTOND each 100ms
     inc     3Ah
     mov     A,3Ah
@@ -43,7 +49,19 @@ T0_INT:
     setb    ACC.0
     mov     3Fh,A
 SKIP_BUTTOND_EN:
+
+    ; Enable SCAN each 50ms
+    inc     3Bh
+    mov     A,3Bh
+    xrl     A,#05h
+    jz      SKIP_SCAN_EN
+    mov     3Bh,#00h
+    mov     A,3Fh
+    setb    ACC.1
+    mov     3Fh,A
+SKIP_SCAN_EN:
     
+    mov     A,3Eh            ; Reload A from W_TEMP
     reti
 code
 
@@ -60,6 +78,7 @@ code
 
 code at 0200h ; Main address
 LOOP:
+    lcall   SCAN
     lcall   BUTTOND
     ljmp    LOOP
 
@@ -122,6 +141,57 @@ INIT_7SEG_CONST:
     mov     67h,#0F8h        ; 7
     mov     68h,#80h         ; 8
     mov     69h,#90h         ; 9
+    ret
+
+SCAN:
+; 30h: DISPLAY0
+; 31h: DISPLAY1
+; 32h: DISPLAY2
+; 3Ch: scan_cont
+; PORT0.0 ... PORT0.6: display output
+; PORT1.0: Display0 common (ON when zero)
+; PORT1.1: Display1 common (ON when zero)
+; PORT1.2: Display2 common (ON when zero)
+    mov     A,3Fh
+    jb      ACC.1,SCAN_RUN
+    ret
+    ;
+SCAN_RUN:
+    clr     ACC.1
+    mov     3Fh,A
+    ; All commons off:
+    mov     A,P1
+    orl     A,#77h ; include 1's for button inputs
+    mov     P1,A
+    ; P0 = display[scan_cont]
+    mov     A,#30h
+    add     A,3Ch
+    mov     R0,A
+    mov     A,@R0
+    mov     P0,A
+    ; Display on:
+    mov     R7,3Ch
+    inc     R7
+    mov     A,#00h
+    setb    C
+SCAN_ROTATE_COMMON:
+    rlc     A
+    clr     C
+    djnz    R7,SCAN_ROTATE_COMMON
+    cpl     A
+    ;
+    mov     R7,A
+    mov     A,P1
+    anl     A,R7
+    mov     P1,A
+    ;
+    ; inc scan_cont:
+    inc     3Ch
+    mov     A,3Ch
+    xrl     A,#03
+    jz      SKIP_CLR_SCAN_CONT 
+    mov     3Ch,#00h
+SKIP_CLR_SCAN_CONT:
     ret
 
 DIVFREQ:
