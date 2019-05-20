@@ -5,7 +5,14 @@ $include(REG51.inc)
 ; 31h -> Display1 (BCD value)
 ; 32h -> Display2 (BCD value)
 ; 33h -> FREQ (16bit)
-; 35h -> 
+; 35h -> BUTTON_MASK
+; 36h -> press
+; 37h -> pdone
+; 39h -> xpress
+; 3Ah -> button_en cont
+;
+; 3Fh -> user flags
+; 3Fh.0 -> buttond_en flag
 ; Hardware mappings:
 ; PORT0.0 ... PORT0.6: display output
 ; PORT1.0: Display0 common (ON when zero)
@@ -23,9 +30,20 @@ code at 000Bh ; T0 interrupt address
     ljmp    T0_INT
 code
 
-code at 0050h
+code at 0040h
 T0_INT:
     lcall   RELOAD_T0
+    ; Enable BUTTOND each 100ms
+    inc     3Ah
+    mov     A,3Ah
+    xrl     A,#0Ah
+    jz      SKIP_BUTTOND_EN
+    mov     3Ah,#00h
+    mov     A,3Fh
+    setb    ACC.0
+    mov     3Fh,A
+SKIP_BUTTOND_EN:
+    
     reti
 code
 
@@ -42,19 +60,55 @@ code
 
 code at 0200h ; Main address
 LOOP:
+    lcall   BUTTOND
     ljmp    LOOP
 
 RELOAD_T0:
 ; Crystal used: 16MHz
 ; machine-cycle: 12*1/16M = 0.75us
 ; 133 * 0.75 ~= 0.1ms
-; 65536 - 133 - 3 = 65400 (0xFF78)
+; 65536 - 133 - 3 - 6 - 1 = 65393 (0xFF71)
     mov     TCON,#00h        ; T0_OFF
     mov     TH0,#0FFh
-    mov     TL0,#78h
+    mov     TL0,#71h
     mov     TCON,#10h        ; T0_ON    
     ret
 end
+
+BUTTOND:
+; 35h: button_mask
+; 36h: press
+; 37h: pdone
+; 39h: xpress
+; 3Fh.0 : buttond_en flag
+; press = button & button_mask
+; pdone = pdone & press
+; xpress = press ^ pdone
+    mov     A,3Fh
+    jb      ACC.0,BUTTOND_RUN
+    ret
+BUTTOND_RUN:
+    clr     ACC.0
+    mov     3Fh,A
+    ; press = button & button_mask
+    mov     A,P1
+    cpl     A
+    anl     A,35h
+    mov     36h,A
+    ;
+    mov     A,P1
+    cpl     A
+    mov     35h,A
+    ; pdone = pdone & press
+    mov     A,36h
+    anl     A,37h
+    mov     37h,A
+    ; xpress = press ^ pdone
+    mov     A,36h
+    xlr     A,38h
+    mov     39h,A
+    ;
+    ret
 
 INIT_7SEG_CONST:
 ; bit0: A
