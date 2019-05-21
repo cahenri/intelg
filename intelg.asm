@@ -12,6 +12,11 @@ $include(REG51.inc)
 ; 3Ah -> button_en cont
 ; 3Bh -> display_en cont
 ; 3Ch -> scan_cont
+; 3Dh -> duty_mode
+;
+; 40h -> NCONT (16bit)
+; 42h -> NCONT4 (1/4 of NCONT) (16bit)
+;
 ; 60h -> _7seg_0
 ; 61h -> _7seg_1
 ; 62h -> _7seg_2
@@ -33,9 +38,10 @@ $include(REG51.inc)
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
 ; PORT1.2: Display2 common (ON when zero)
-; PORT1.4: Button0
-; PORT1.5: Button1
-; PORT1.6: Button2
+; PORT1.4: Button0 DUTY (Left most)
+; PORT1.5: Button1 DEC
+; PORT1.6: Button2 INC
+; TODO: add button timers
 
 code at 0 ; Reset address
     ljmp    INIT
@@ -89,10 +95,103 @@ code
 
 code at 0200h ; Main address
 LOOP:
+    lcall   SET_DISPLAY_VALUE
     lcall   SCAN
     lcall   BUTTOND
+    lcall   FREQ_ADJ
+    ;
     ljmp    LOOP
 
+FREQ_ADJ:
+; PORT1.4: Button0 DUTY (Left most)
+; PORT1.5: Button1 DEC
+; PORT1.6: Button2 INC
+; 3Dh -> duty_mode
+; 0 -> 25%
+; 1 -> 50%
+; 2 -> 75%
+; 3 -> 100%
+; 36h -> press
+; 37h -> pdone
+; 39h -> xpress
+    mov     A,39h
+    jnb     ACC.6,BTN_DEC_CHECK
+    ; Set pdone
+    mov     A,37h
+    setb    ACC.6
+    mov     37h,A
+    ; FREQ += 1
+    clr     C
+    mov     A,33h
+    addc    A,#01h
+    mov     33h,A
+    ;
+    mov     A,34h
+    addc    A,#00h
+    mov     34h,A
+;
+BTN_DEC_CHECK:
+    mov     A,39h
+    jnb     ACC.5,BTN_DUTY_CHECK
+    ; Set pdone
+    mov     A,37h
+    setb    ACC.5
+    mov     37h,A
+    ; FREQ -= 1
+    clr     C
+    mov     A,33h
+    subb    A,#01h
+    mov     33h,A
+    ;
+    mov     A,34h
+    subb    A,#00h
+    mov     34h,A
+;
+BTN_DUTY_CHECK:
+; 3Dh: Duty mode
+    mov     A,39h
+    jnb     ACC.4,FREQ_ADJ_END
+    ; Set pdone
+    mov     A,37h
+    setb    ACC.4
+    mov     37h,A
+    ; duty++
+    inc     3Dh
+    mov     A,3Dh
+    xrl     A,#04h
+    jnz     FREQ_ADJ_END
+    mov     3Dh,#00h
+;
+FREQ_ADJ_END
+    ret
+
+SET_DISPLAY_VALUE:
+; 33h -> FREQ (16bit)
+    mov     6Ah,33h
+    mov     6Bh,34h
+    lcall   BIN10_BCD
+    ; set display[0]
+    mov     A,6Ch
+    anl     A,#0Fh
+    add     A,#60h
+    mov     R0,A
+    mov     30h,@R0
+    ; set display[1]
+    mov     A,6Ch
+    swap    A
+    anl     A,#0Fh
+    add     A,#60h
+    mov     R0,A
+    mov     31h,@R0
+    ; set dipslay[2]
+    mov     A,6Dh
+    anl     A,#0Fh
+    add     A,#60h
+    mov     R0,A
+    mov     32h,@R0
+    ;
+    ret
+    
 RELOAD_T0:
 ; Crystal used: 16MHz
 ; machine-cycle: 12*1/16M = 0.75us
