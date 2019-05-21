@@ -15,7 +15,10 @@ $include(REG51.inc)
 ; 3Dh -> duty_mode
 ;
 ; 40h -> NCONT (16bit)
-; 42h -> NCONT4 (1/4 of NCONT) (16bit)
+; 42h -> NCONT_HIGH (16bit)
+; 44h -> NCONT_LOW (16bit)
+; 46h -> TCONT (16bit)
+; 48h -> PSW_TEMP
 ;
 ; 60h -> _7seg_0
 ; 61h -> _7seg_1
@@ -38,6 +41,7 @@ $include(REG51.inc)
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
 ; PORT1.2: Display2 common (ON when zero)
+; PORT1.3: PWM OUT
 ; PORT1.4: Button0 DUTY (Left most)
 ; PORT1.5: Button1 DEC
 ; PORT1.6: Button2 INC
@@ -55,6 +59,7 @@ code at 0040h
 T0_INT:
     lcall   RELOAD_T0
     mov     3Eh,A            ; Save A to W_TEMP
+    mov     48h,PSW
 
     ; Enable BUTTOND each 100ms
     inc     3Ah
@@ -78,7 +83,18 @@ SKIP_BUTTOND_EN:
     mov     3Fh,A
 SKIP_SCAN_EN:
     
+    ; inc TCONT
+    clr     C
+    mov     A,46h
+    addc    A,#01h
+    mov     46h,A
+    ;
+    mov     A,47h
+    addc    A,#00h
+    mov     47h,A
+
     mov     A,3Eh            ; Reload A from W_TEMP
+    mov     PSW,48h
     reti
 code
 
@@ -99,8 +115,140 @@ LOOP:
     lcall   SCAN
     lcall   BUTTOND
     lcall   FREQ_ADJ
+    lcall   CALC_NCONT
+    lcall   OUTD
     ;
     ljmp    LOOP
+
+OUTD:
+    clr     C
+    jb      P1.3,OUTD_HIGH
+
+    ; if P1.3==0 && TCONT>NCONT_LOW then TCONT=0, P1.3=1
+    mov     A,45h
+    subb    A,47h
+    jz      OUTD_IFG_NCONT_LOW
+    mov     A,44h
+    subb    A,46h
+OUTD_IFG_NCONT_LOW:
+    jc      OUTD_CPL
+    ret
+
+    ; if P1.3==1 && TCONT>NCONT_HIGH then TCONT=0, P1.3=0
+OUTD_HIGH:
+    mov     A,43h
+    subb    A,47h
+    jz      OUTD_IFG_NCONT_HIGH
+    mov     A,42h
+    subb    A,46h
+OUTD_IFG_NCONT_HIGH:
+    jc      OUTD_CPL
+    ret
+
+OUTD_CPL:
+    mov     A,P1
+    xrl     A,#08h
+    orl     A,#70h ; for buttons
+    mov     P1,A
+    ; TCONT = 0
+    mov     46h,#00h
+    mov     47h,#00h
+    ret
+
+CALC_NCONT:
+; T = 1/f
+; NCONT = 10 * (1000/FREQ) ; number of timer conts for one period
+; 40h: NCONT (16bit)
+; 42h: NCONT_HIGH (16bit)
+; 33h -> FREQ (16bit)
+; 35h -> BUTTON_MASK
+; 3Dh -> duty_mode
+    mov     6Ch,33h
+    mov     6Dh,34h
+    lcall   DIVFREQ
+    mov     R2,6Eh
+    mov     R3,6Fh
+    ; 2*QUO:
+    clr     C
+    mov     A,R2
+    rlc     A
+    mov     R2,A
+    ;
+    mov     A,R3
+    rlc     A
+    mov     R3,A
+    ;
+    ; QUO*10:
+    mov     R7,#03h
+CALC_NCONT_MUL:
+    clr     C
+    mov     A,6Eh
+    rlc     A
+    mov     6Eh,A
+    ;
+    mov     A,6Fh
+    rlc     A
+    mov     6Fh,A
+    ;
+    djnz    R7,CALC_NCONT_MUL
+    ; end by adding 2:
+    clr     C
+    mov     A,6Eh
+    addc    A,R2
+    mov     40h,A
+    ;
+    mov     A,6Fh
+    addc    A,R3
+    mov     41h,A
+    ;
+CALC_NCONT_HIGH:
+    ; NCONT/4:
+    mov     43h,41h
+    mov     42h,40h
+    mov     R7,#02h
+CALC_NCONT_HIGH_4:
+; 3Dh -> duty_mode
+    clr     C
+    mov     A,43h
+    rrc     A
+    mov     43h,A
+    ;
+    mov     A,42h
+    rrc     A
+    mov     42h,A
+    ;
+    djnz    R7,CALC_NCONT_HIGH_4
+    ;
+    mov     A,3Dh
+    xrl     A,#00h
+    jnz     NCONT_HIGH_SUM
+    sjmp    CALC_NCONT_LOW
+NCONT_HIGH_SUM:
+    mov     R3,43h
+    mov     R2,42h
+    mov     R7,3Dh
+NCONT_HIGH_SUM_LOOP:
+    clr     C
+    mov     A,42h
+    addc    A,R2
+    mov     42h,A
+    ;
+    mov     A,43h
+    addc    A,R3
+    mov     43h,A
+    ;
+    djnz    R7,NCONT_HIGH_SUM_LOOP
+CALC_NCONT_LOW:
+    clr     C
+    mov     A,40h
+    subb    A,42h
+    mov     44h,A
+    ;
+    mov     A,41h
+    subb    A,43h
+    mov     45h,A
+    ;
+    ret
 
 FREQ_ADJ:
 ; PORT1.4: Button0 DUTY (Left most)
