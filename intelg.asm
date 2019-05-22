@@ -282,7 +282,15 @@ FREQ_ADJ_:
     mov     A,37h
     setb    ACC.6
     mov     37h,A
-    ; FREQ += 1
+    ; FREQ += 1 if FREQ != 999d
+    mov     A,33h
+    xrl     A,#0E7h
+    jnz     FREQ_INC
+    mov     A,34h
+    xrl     A,#03h
+    jnz     FREQ_INC
+    ret
+    ;
 FREQ_INC:
     clr     C
     mov     A,33h
@@ -300,7 +308,15 @@ BTN_DEC_CHECK:
     mov     A,37h
     setb    ACC.5
     mov     37h,A
-    ; FREQ -= 1
+    ; FREQ -= 1 if FREQ != 0d
+    mov     A,33h
+    xrl     A,#00h
+    jnz     FREQ_DEC
+    mov     A,34h
+    xrl     A,#00h
+    jnz     FREQ_DEC
+    ret
+FREQ_DEC:
     clr     C
     mov     A,33h
     subb    A,#01h
