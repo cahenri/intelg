@@ -95,6 +95,7 @@ INIT:
     mov     PSW,#00h
     lcall   RELOAD_T0
     lcall   INIT_7SEG_CONST
+    lcall   INIT_RAM
     ljmp    LOOP
 code
 
@@ -108,6 +109,16 @@ LOOP:
     lcall   OUTD
     ;
     ljmp    LOOP
+
+INIT_RAM:
+    mov     R0,#30h
+INIT_RAM_LOOP:
+    mov     @R0,#00h
+    inc     R0
+    mov     A,R0
+    xrl     A,#50h
+    jnz     INIT_RAM_LOOP
+    ret
 
 OUTD:
     clr     C
