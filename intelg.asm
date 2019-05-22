@@ -19,6 +19,7 @@ $include(REG51.inc)
 ; 44h -> NCOUNT_LOW (16bit)
 ; 46h -> TCOUNT (16bit)
 ; 48h -> INT_COUNT
+; 49h -> btn_count
 ;
 ; 60h -> _7seg_0
 ; 61h -> _7seg_1
@@ -80,6 +81,12 @@ INT_1MS:
 
     inc     3Ah ; buttond_en
     inc     3Bh ; scan_en
+
+    mov     A,49h ; btn_count
+    xrl     A,#0FFh
+    jz      BTN_COUNT_SKIP
+    inc     49h
+BTN_COUNT_SKIP:
     
 RET_INT:
     mov     A,3Eh            ; Reload A from W_TEMP
@@ -262,13 +269,21 @@ FREQ_ADJ:
 ; 36h -> press
 ; 37h -> pdone
 ; 39h -> xpress
-    mov     A,39h
+    mov     R0,#39h
+    mov     A,49h
+    subb    A,#F9h           ; if btn hold for 250ms
+    jc      FREQ_ADJ_
+    mov     R0,#36h
+    ;
+FREQ_ADJ_:
+    mov     A,@R0
     jnb     ACC.6,BTN_DEC_CHECK
     ; Set pdone
     mov     A,37h
     setb    ACC.6
     mov     37h,A
     ; FREQ += 1
+FREQ_INC:
     clr     C
     mov     A,33h
     addc    A,#01h
@@ -279,7 +294,7 @@ FREQ_ADJ:
     mov     34h,A
 ;
 BTN_DEC_CHECK:
-    mov     A,39h
+    mov     A,@R0
     jnb     ACC.5,BTN_DUTY_CHECK
     ; Set pdone
     mov     A,37h
@@ -310,7 +325,7 @@ BTN_DUTY_CHECK:
     jnz     FREQ_ADJ_END
     mov     3Dh,#00h
 ;
-FREQ_ADJ_END
+FREQ_ADJ_END:
     ret
 
 SET_DISPLAY_VALUE:
@@ -356,11 +371,18 @@ BUTTOND:
 ; 36h: press
 ; 37h: pdone
 ; 39h: xpress
+; 49h: btn_count
 ; press = button & button_mask
 ; pdone = pdone & press
 ; xpress = press ^ pdone
+    mov     A,36h
+    anl     A,#70h
+    jnz     BUTTOND_FAST
+    mov     49h,#00h
+BUTTOND_FAST:
+
     clr     C
-    mov     A,3Ah
+    mov     A,3Ah          ; button_en count
     subb    A,#64h         ; 100ms
     jnc     BUTTOND_RUN
     ret
@@ -382,7 +404,7 @@ BUTTOND_RUN:
     mov     37h,A
     ; xpress = press ^ pdone
     mov     A,36h
-    xlr     A,38h
+    xrl     A,38h
     mov     39h,A
     ;
     ret
@@ -463,7 +485,7 @@ DIVFREQ:
 ; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
 ; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
 ; 6Eh -> QUO[CIENT] (16bit)
-    mov     6Ah,#FAh
+    mov     6Ah,#0FAh
     mov     6Eh,#00h
     mov     6Fh,#00h
     mov     R6,#00h         ; DIVID will be rotated here
