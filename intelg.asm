@@ -14,11 +14,11 @@ $include(REG51.inc)
 ; 3Ch -> scan_cont
 ; 3Dh -> duty_mode
 ;
-; 40h -> NCONT (16bit)
-; 42h -> NCONT_HIGH (16bit)
-; 44h -> NCONT_LOW (16bit)
-; 46h -> TCONT (16bit)
-; 48h -> PSW_TEMP
+; 40h -> NCOUNT (16bit)
+; 42h -> NCOUNT_HIGH (16bit)
+; 44h -> NCOUNT_LOW (16bit)
+; 46h -> TCOUNT (16bit)
+; 48h -> INT_COUNT
 ;
 ; 60h -> _7seg_0
 ; 61h -> _7seg_1
@@ -33,9 +33,7 @@ $include(REG51.inc)
 ; 6Ah ... 6Fh -> used as arguments for functions
 ;
 ; 3Eh -> W_TEMP
-; 3Fh -> system flags
-; 3Fh.0 -> buttond_en flag
-; 3Fh.1 -> scan_en flag
+; 3Fh -> PSW_TEMP
 ; Hardware mappings:
 ; PORT0.0 ... PORT0.6: display output
 ; PORT1.0: Display0 common (ON when zero)
@@ -59,31 +57,9 @@ code at 0040h
 T0_INT:
     lcall   RELOAD_T0
     mov     3Eh,A            ; Save A to W_TEMP
-    mov     48h,PSW
+    mov     3Fh,PSW
 
-    ; Enable BUTTOND each 100ms
-    inc     3Ah
-    mov     A,3Ah
-    xrl     A,#0Ah
-    jz      SKIP_BUTTOND_EN
-    mov     3Ah,#00h
-    mov     A,3Fh
-    setb    ACC.0
-    mov     3Fh,A
-SKIP_BUTTOND_EN:
-
-    ; Enable SCAN each 50ms
-    inc     3Bh
-    mov     A,3Bh
-    xrl     A,#05h
-    jz      SKIP_SCAN_EN
-    mov     3Bh,#00h
-    mov     A,3Fh
-    setb    ACC.1
-    mov     3Fh,A
-SKIP_SCAN_EN:
-    
-    ; inc TCONT
+    ; inc TCOUNT
     clr     C
     mov     A,46h
     addc    A,#01h
@@ -93,8 +69,21 @@ SKIP_SCAN_EN:
     addc    A,#00h
     mov     47h,A
 
+    ; The counter must hit 10 counts to continue
+    inc     48h
+    mov     A,48h
+    xrl     A,#0Ah
+    jnz     RET_INT
+
+INT_1MS:
+    mov     48h,#00h
+
+    inc     3Ah ; buttond_en
+    inc     3Bh ; scan_en
+    
+RET_INT:
     mov     A,3Eh            ; Reload A from W_TEMP
-    mov     PSW,48h
+    mov     PSW,3Fh
     reti
 code
 
@@ -115,7 +104,7 @@ LOOP:
     lcall   SCAN
     lcall   BUTTOND
     lcall   FREQ_ADJ
-    lcall   CALC_NCONT
+    lcall   CALC_NCOUNT
     lcall   OUTD
     ;
     ljmp    LOOP
@@ -124,24 +113,24 @@ OUTD:
     clr     C
     jb      P1.3,OUTD_HIGH
 
-    ; if P1.3==0 && TCONT>NCONT_LOW then TCONT=0, P1.3=1
+    ; if P1.3==0 && TCOUNT>NCOUNT_LOW then TCOUNT=0, P1.3=1
     mov     A,45h
     subb    A,47h
-    jz      OUTD_IFG_NCONT_LOW
+    jz      OUTD_IFG_NCOUNT_LOW
     mov     A,44h
     subb    A,46h
-OUTD_IFG_NCONT_LOW:
+OUTD_IFG_NCOUNT_LOW:
     jc      OUTD_CPL
     ret
 
-    ; if P1.3==1 && TCONT>NCONT_HIGH then TCONT=0, P1.3=0
+    ; if P1.3==1 && TCOUNT>NCOUNT_HIGH then TCOUNT=0, P1.3=0
 OUTD_HIGH:
     mov     A,43h
     subb    A,47h
-    jz      OUTD_IFG_NCONT_HIGH
+    jz      OUTD_IFG_NCOUNT_HIGH
     mov     A,42h
     subb    A,46h
-OUTD_IFG_NCONT_HIGH:
+OUTD_IFG_NCOUNT_HIGH:
     jc      OUTD_CPL
     ret
 
@@ -150,16 +139,16 @@ OUTD_CPL:
     xrl     A,#08h
     orl     A,#70h ; for buttons
     mov     P1,A
-    ; TCONT = 0
+    ; TCOUNT = 0
     mov     46h,#00h
     mov     47h,#00h
     ret
 
-CALC_NCONT:
+CALC_NCOUNT:
 ; T = 1/f
-; NCONT = 10 * (1000/FREQ) ; number of timer conts for one period
-; 40h: NCONT (16bit)
-; 42h: NCONT_HIGH (16bit)
+; NCOUNT = 10 * (1000/FREQ) ; number of timer conts for one period
+; 40h: NCOUNT (16bit)
+; 42h: NCOUNT_HIGH (16bit)
 ; 33h -> FREQ (16bit)
 ; 35h -> BUTTON_MASK
 ; 3Dh -> duty_mode
@@ -180,7 +169,7 @@ CALC_NCONT:
     ;
     ; QUO*10:
     mov     R7,#03h
-CALC_NCONT_MUL:
+CALC_NCOUNT_MUL:
     clr     C
     mov     A,6Eh
     rlc     A
@@ -190,7 +179,7 @@ CALC_NCONT_MUL:
     rlc     A
     mov     6Fh,A
     ;
-    djnz    R7,CALC_NCONT_MUL
+    djnz    R7,CALC_NCOUNT_MUL
     ; end by adding 2:
     clr     C
     mov     A,6Eh
@@ -201,12 +190,12 @@ CALC_NCONT_MUL:
     addc    A,R3
     mov     41h,A
     ;
-CALC_NCONT_HIGH:
-    ; NCONT/4:
+CALC_NCOUNT_HIGH:
+    ; NCOUNT/4:
     mov     43h,41h
     mov     42h,40h
     mov     R7,#02h
-CALC_NCONT_HIGH_4:
+CALC_NCOUNT_HIGH_4:
 ; 3Dh -> duty_mode
     clr     C
     mov     A,43h
@@ -217,17 +206,17 @@ CALC_NCONT_HIGH_4:
     rrc     A
     mov     42h,A
     ;
-    djnz    R7,CALC_NCONT_HIGH_4
+    djnz    R7,CALC_NCOUNT_HIGH_4
     ;
     mov     A,3Dh
     xrl     A,#00h
-    jnz     NCONT_HIGH_SUM
-    sjmp    CALC_NCONT_LOW
-NCONT_HIGH_SUM:
+    jnz     NCOUNT_HIGH_SUM
+    sjmp    CALC_NCOUNT_LOW
+NCOUNT_HIGH_SUM:
     mov     R3,43h
     mov     R2,42h
     mov     R7,3Dh
-NCONT_HIGH_SUM_LOOP:
+NCOUNT_HIGH_SUM_LOOP:
     clr     C
     mov     A,42h
     addc    A,R2
@@ -237,8 +226,8 @@ NCONT_HIGH_SUM_LOOP:
     addc    A,R3
     mov     43h,A
     ;
-    djnz    R7,NCONT_HIGH_SUM_LOOP
-CALC_NCONT_LOW:
+    djnz    R7,NCOUNT_HIGH_SUM_LOOP
+CALC_NCOUNT_LOW:
     clr     C
     mov     A,40h
     subb    A,42h
@@ -356,16 +345,17 @@ BUTTOND:
 ; 36h: press
 ; 37h: pdone
 ; 39h: xpress
-; 3Fh.0 : buttond_en flag
 ; press = button & button_mask
 ; pdone = pdone & press
 ; xpress = press ^ pdone
-    mov     A,3Fh
-    jb      ACC.0,BUTTOND_RUN
+    clr     C
+    mov     A,3Ah
+    subb    A,#64h         ; 100ms
+    jnc     BUTTOND_RUN
     ret
+;
 BUTTOND_RUN:
-    clr     ACC.0
-    mov     3Fh,A
+    mov     3Ah,#00h
     ; press = button & button_mask
     mov     A,P1
     cpl     A
@@ -409,13 +399,14 @@ SCAN:
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
 ; PORT1.2: Display2 common (ON when zero)
-    mov     A,3Fh
-    jb      ACC.1,SCAN_RUN
+    clr     C
+    mov     A,3Bh
+    subb    A,#32h    ; run eacho 50ms
+    jnc     SCAN_RUN
     ret
     ;
 SCAN_RUN:
-    clr     ACC.1
-    mov     3Fh,A
+    mov     3Bh,#00h
     ; All commons off:
     mov     A,P1
     orl     A,#77h ; include 1's for button inputs
@@ -446,17 +437,17 @@ SCAN_ROTATE_COMMON:
     inc     3Ch
     mov     A,3Ch
     xrl     A,#03
-    jz      SKIP_CLR_SCAN_CONT 
+    jz      SKIP_CLR_SCAN_COUNT 
     mov     3Ch,#00h
-SKIP_CLR_SCAN_CONT:
+SKIP_CLR_SCAN_COUNT:
     ret
 
 DIVFREQ:
 ; Operation performed by this function:
 ; 1000/FREQ
 ;
-; The period for FREQ is definded by NCONT*0.1ms
-; NCONT = 10 * (1000/FREQ)
+; The period for FREQ is definded by NCOUNT*0.1ms
+; NCOUNT = 10 * (1000/FREQ)
 ; 1000d = 0b 0000 0011 1110 1000
 ; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
 ; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
