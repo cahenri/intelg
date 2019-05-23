@@ -19,7 +19,6 @@ $include(REG51.inc)
 ; 44h -> NCOUNT_LOW (16bit)
 ; 46h -> TCOUNT (16bit)
 ; 48h -> INT_COUNT
-; 49h -> btn_count
 ;
 ; 60h -> _7seg_0
 ; 61h -> _7seg_1
@@ -81,11 +80,6 @@ INT_1MS:
 
     inc     3Ah ; buttond_en
     inc     3Bh ; scan_en
-
-    mov     A,49h ; btn_count
-    xrl     A,#0FFh
-    jz      BTN_COUNT_SKIP
-    inc     49h
 BTN_COUNT_SKIP:
     
 RET_INT:
@@ -380,16 +374,9 @@ BUTTOND:
 ; 36h: press
 ; 37h: pdone
 ; 38h: xpress
-; 49h: btn_count
 ; press = button & button_mask
 ; pdone = pdone & press
 ; xpress = press ^ pdone
-    mov     A,36h
-    anl     A,#70h
-    jnz     BUTTOND_FAST
-    mov     49h,#00h
-BUTTOND_FAST:
-
     clr     C
     mov     A,3Ah          ; button_en count
     subb    A,#64h         ; 100ms
