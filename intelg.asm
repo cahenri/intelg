@@ -167,40 +167,8 @@ CALC_NCOUNT:
     mov     6Ch,33h
     mov     6Dh,34h
     lcall   DIVFREQ
-    mov     R2,6Eh
-    mov     R3,6Fh
-    ; 2*QUO:
-    clr     C
-    mov     A,R2
-    rlc     A
-    mov     R2,A
-    ;
-    mov     A,R3
-    rlc     A
-    mov     R3,A
-    ;
-    ; QUO*10:
-    mov     R7,#03h
-CALC_NCOUNT_MUL:
-    clr     C
-    mov     A,6Eh
-    rlc     A
-    mov     6Eh,A
-    ;
-    mov     A,6Fh
-    rlc     A
-    mov     6Fh,A
-    ;
-    djnz    R7,CALC_NCOUNT_MUL
-    ; end by adding 2:
-    clr     C
-    mov     A,6Eh
-    addc    A,R2
-    mov     40h,A
-    ;
-    mov     A,6Fh
-    addc    A,R3
-    mov     41h,A
+    mov     40h,6Eh
+    mov     41h,6Fh
     ;
 CALC_NCOUNT_HIGH:
     ; NCOUNT/4:
@@ -474,11 +442,11 @@ SKIP_CLR_SCAN_COUNT:
 
 DIVFREQ:
 ; Operation performed by this function:
-; 1000/FREQ
+; 10000/FREQ
 ;
 ; The period for FREQ is definded by NCOUNT*0.1ms
-; NCOUNT = 10 * (1000/FREQ)
-; 1000d = 0b 0000 0011 1110 1000
+; NCOUNT = 10000/FREQ
+; 10000d = 0b 0010 0111 0001 0000
 ; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
 ; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
 ; 6Eh -> QUO[CIENT] (16bit)
@@ -488,13 +456,17 @@ DIVFREQ:
     mov     R6,#00h         ; DIVID will be rotated here
     mov     R7,#00h
 
-    mov     R5,#0Ah
+    mov     R5,#0Eh
 DIVFREQ_0:
     ; Rotate DIVID into R6:
-    mov     A,6Ah
     clr     C
+    mov     A,6Ah
     rlc     A
     mov     6Ah,A
+    ;
+    mov     A,6Bh
+    rlc     A
+    mov     6Bh,A
     ;
     mov     A,R6
     rlc     A
