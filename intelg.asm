@@ -14,10 +14,10 @@ $include(REG51.inc)
 ; 3Ch -> scan_cont
 ; 3Dh -> duty_mode
 ;
-; 40h -> NCOUNT (16bit)
-; 42h -> NCOUNT_HIGH (16bit)
-; 44h -> NCOUNT_LOW (16bit)
-; 46h -> TCOUNT (16bit)
+; 40h -> NCOUNT (8bit)
+; 42h -> NCOUNT_HIGH (8bit)
+; 44h -> NCOUNT_LOW (8bit)
+; 46h -> TCOUNT (8bit)
 ; 48h -> INT_COUNT
 ;
 ; 60h -> _7seg_0
@@ -34,7 +34,12 @@ $include(REG51.inc)
 ;
 ; 3Eh -> W_TEMP
 ; 3Fh -> PSW_TEMP
+;
 ; Hardware mappings:
+; Crystal used: 16MHz
+; machine-cycle: 12*1/16M = 0.75us
+; 133 * 0.75 ~= 0.1ms
+; 65536 - 133 - 3 - 6 - 1 = 65393 (0xFF71)
 ; PORT0.0 ... PORT0.6: display output
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
@@ -43,7 +48,6 @@ $include(REG51.inc)
 ; PORT1.4: Button0 DUTY (Left most)
 ; PORT1.5: Button1 DEC
 ; PORT1.6: Button2 INC
-; TODO: add button timers
 
 code at 0 ; Reset address
     ljmp    INIT
@@ -55,19 +59,16 @@ code
 
 code at 0040h
 T0_INT:
-    lcall   RELOAD_T0
+    mov     TCON,#00h        ; T0_OFF
+    mov     TH0,#0FFh
+    mov     TL0,#71h
+    mov     TCON,#10h        ; T0_ON    
+    ;
     mov     3Eh,A            ; Save A to W_TEMP
     mov     3Fh,PSW
 
     ; inc TCOUNT
-    clr     C
-    mov     A,46h
-    addc    A,#01h
-    mov     46h,A
-    ;
-    mov     A,47h
-    addc    A,#00h
-    mov     47h,A
+    inc     46h
 
     ; The counter must hit 10 counts to continue
     inc     48h
@@ -94,9 +95,13 @@ INIT:
     mov     IE,#82h          ; Enable T0 interrupts
     mov     SP,#70h
     mov     PSW,#00h
-    lcall   RELOAD_T0
-    lcall   INIT_7SEG_CONST
+    mov     TCON,#00h        ; T0_OFF
+    mov     TH0,#0FFh
+    mov     TL0,#71h
+    mov     TCON,#10h        ; T0_ON    
     lcall   INIT_RAM
+    lcall   INIT_7SEG_CONST
+    mov     33h,#32h
     ljmp    LOOP
 code
 
@@ -125,63 +130,59 @@ OUTD:
     clr     C
     jb      P1.3,OUTD_HIGH
 
-    ; if P1.3==0 && TCOUNT>NCOUNT_LOW then TCOUNT=0, P1.3=1
-    mov     A,45h
-    subb    A,47h
-    jz      OUTD_IFG_NCOUNT_LOW
+    ; if P1.3==0 && TCOUNT>=NCOUNT_LOW then TCOUNT=0, P1.3=1
     mov     A,44h
     subb    A,46h
-OUTD_IFG_NCOUNT_LOW:
     jc      OUTD_CPL
     ret
 
-    ; if P1.3==1 && TCOUNT>NCOUNT_HIGH then TCOUNT=0, P1.3=0
+    ; if P1.3==1 && TCOUNT>=NCOUNT_HIGH then TCOUNT=0, P1.3=0
 OUTD_HIGH:
-    mov     A,43h
-    subb    A,47h
-    jz      OUTD_IFG_NCOUNT_HIGH
     mov     A,42h
     subb    A,46h
-OUTD_IFG_NCOUNT_HIGH:
     jc      OUTD_CPL
     ret
 
 OUTD_CPL:
+    ; if duty=100%, set out high and do nothing
+    mov     A,3Dh
+    xrl     A,#03h
+    jnz     OUTD_CPL_
+    mov     A,P1
+    orl     A,#78h
+    mov     P1,A
+    ret
+OUTD_CPL_:
     mov     A,P1
     xrl     A,#08h
     orl     A,#70h ; for buttons
     mov     P1,A
     ; TCOUNT = 0
     mov     46h,#00h
-    mov     47h,#00h
     ret
 
 CALC_NCOUNT:
 ; T = 1/f
-; NCOUNT = 10 * (1000/FREQ) ; number of timer conts for one period
-; 40h: NCOUNT (16bit)
-; 42h: NCOUNT_HIGH (16bit)
-; 33h -> FREQ (16bit)
+; NCOUNT = (10000/FREQ) ; number of timer counts for one period
+; As the frequency adjusts by a step of 50, in a range of (0-500),
+;   the maximum value needed by NCOUNT is 200 (10000/50) (8bit)
+; 40h: NCOUNT (8bit)
+; 42h: NCOUNT_HIGH (8bit)
+; 33h -> FREQ (8bit)
 ; 35h -> BUTTON_MASK
 ; 3Dh -> duty_mode
     mov     6Ch,33h
     mov     6Dh,34h
     lcall   DIVFREQ
     mov     40h,6Eh
-    mov     41h,6Fh
     ;
 CALC_NCOUNT_HIGH:
     ; NCOUNT/4:
-    mov     43h,41h
     mov     42h,40h
     mov     R7,#02h
 CALC_NCOUNT_HIGH_4:
 ; 3Dh -> duty_mode
     clr     C
-    mov     A,43h
-    rrc     A
-    mov     43h,A
-    ;
     mov     A,42h
     rrc     A
     mov     42h,A
@@ -193,7 +194,6 @@ CALC_NCOUNT_HIGH_4:
     jnz     NCOUNT_HIGH_SUM
     sjmp    CALC_NCOUNT_LOW
 NCOUNT_HIGH_SUM:
-    mov     R3,43h
     mov     R2,42h
     mov     R7,3Dh
 NCOUNT_HIGH_SUM_LOOP:
@@ -202,20 +202,12 @@ NCOUNT_HIGH_SUM_LOOP:
     addc    A,R2
     mov     42h,A
     ;
-    mov     A,43h
-    addc    A,R3
-    mov     43h,A
-    ;
     djnz    R7,NCOUNT_HIGH_SUM_LOOP
 CALC_NCOUNT_LOW:
     clr     C
     mov     A,40h
     subb    A,42h
     mov     44h,A
-    ;
-    mov     A,41h
-    subb    A,43h
-    mov     45h,A
     ;
     ret
 
@@ -267,9 +259,9 @@ BTN_DEC_CHECK:
     mov     A,37h
     setb    ACC.5
     mov     37h,A
-    ; FREQ -= 1 if FREQ != 0d
+    ; FREQ -= 1 if FREQ != 50d
     mov     A,33h
-    xrl     A,#00h
+    xrl     A,#32h
     jnz     FREQ_DEC
     mov     A,34h
     xrl     A,#00h
@@ -332,17 +324,6 @@ SET_DISPLAY_VALUE:
     ;
     ret
     
-RELOAD_T0:
-; Crystal used: 16MHz
-; machine-cycle: 12*1/16M = 0.75us
-; 133 * 0.75 ~= 0.1ms
-; 65536 - 133 - 3 - 6 - 1 = 65393 (0xFF71)
-    mov     TCON,#00h        ; T0_OFF
-    mov     TH0,#0FFh
-    mov     TL0,#71h
-    mov     TCON,#10h        ; T0_ON    
-    ret
-
 BUTTOND:
 ; 35h: button_mask
 ; 36h: press
