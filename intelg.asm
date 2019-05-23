@@ -8,7 +8,7 @@ $include(REG51.inc)
 ; 35h -> BUTTON_MASK
 ; 36h -> press
 ; 37h -> pdone
-; 39h -> xpress
+; 38h -> xpress
 ; 3Ah -> button_en cont
 ; 3Bh -> display_en cont
 ; 3Ch -> scan_cont
@@ -268,33 +268,26 @@ FREQ_ADJ:
 ; 3 -> 100%
 ; 36h -> press
 ; 37h -> pdone
-; 39h -> xpress
-    mov     R0,#39h
-    mov     A,49h
-    subb    A,#F9h           ; if btn hold for 250ms
-    jc      FREQ_ADJ_
-    mov     R0,#36h
-    ;
-FREQ_ADJ_:
-    mov     A,@R0
+; 38h -> xpress
+    mov     A,38h
     jnb     ACC.6,BTN_DEC_CHECK
     ; Set pdone
     mov     A,37h
     setb    ACC.6
     mov     37h,A
-    ; FREQ += 1 if FREQ != 999d
+    ; FREQ += 50 if FREQ != 500d
     mov     A,33h
-    xrl     A,#0E7h
+    xrl     A,#0F4h
     jnz     FREQ_INC
     mov     A,34h
-    xrl     A,#03h
+    xrl     A,#01h
     jnz     FREQ_INC
     ret
     ;
 FREQ_INC:
     clr     C
     mov     A,33h
-    addc    A,#01h
+    addc    A,#32h
     mov     33h,A
     ;
     mov     A,34h
@@ -302,7 +295,7 @@ FREQ_INC:
     mov     34h,A
 ;
 BTN_DEC_CHECK:
-    mov     A,@R0
+    mov     A,38h
     jnb     ACC.5,BTN_DUTY_CHECK
     ; Set pdone
     mov     A,37h
@@ -319,7 +312,7 @@ BTN_DEC_CHECK:
 FREQ_DEC:
     clr     C
     mov     A,33h
-    subb    A,#01h
+    subb    A,#32h
     mov     33h,A
     ;
     mov     A,34h
@@ -328,7 +321,7 @@ FREQ_DEC:
 ;
 BTN_DUTY_CHECK:
 ; 3Dh: Duty mode
-    mov     A,39h
+    mov     A,38h
     jnb     ACC.4,FREQ_ADJ_END
     ; Set pdone
     mov     A,37h
@@ -386,7 +379,7 @@ BUTTOND:
 ; 35h: button_mask
 ; 36h: press
 ; 37h: pdone
-; 39h: xpress
+; 38h: xpress
 ; 49h: btn_count
 ; press = button & button_mask
 ; pdone = pdone & press
@@ -420,8 +413,8 @@ BUTTOND_RUN:
     mov     37h,A
     ; xpress = press ^ pdone
     mov     A,36h
-    xrl     A,38h
-    mov     39h,A
+    xrl     A,37h
+    mov     38h,A
     ;
     ret
 
@@ -450,7 +443,7 @@ SCAN:
 ; PORT1.2: Display2 common (ON when zero)
     clr     C
     mov     A,3Bh
-    subb    A,#32h    ; run eacho 50ms
+    subb    A,#32h    ; run each 50ms
     jnc     SCAN_RUN
     ret
     ;
@@ -480,13 +473,14 @@ SCAN_ROTATE_COMMON:
     mov     R7,A
     mov     A,P1
     anl     A,R7
+    orl     A,#70h
     mov     P1,A
     ;
     ; inc scan_cont:
     inc     3Ch
     mov     A,3Ch
     xrl     A,#03
-    jz      SKIP_CLR_SCAN_COUNT 
+    jnz     SKIP_CLR_SCAN_COUNT 
     mov     3Ch,#00h
 SKIP_CLR_SCAN_COUNT:
     ret
