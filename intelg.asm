@@ -131,16 +131,16 @@ OUTD:
     jb      P1.3,OUTD_HIGH
 
     ; if P1.3==0 && TCOUNT>=NCOUNT_LOW then TCOUNT=0, P1.3=1
-    mov     A,44h
-    subb    A,46h
-    jc      OUTD_CPL
+    mov     A,46h ; TCOUNT
+    subb    A,44h
+    jnc     OUTD_CPL
     ret
 
     ; if P1.3==1 && TCOUNT>=NCOUNT_HIGH then TCOUNT=0, P1.3=0
 OUTD_HIGH:
-    mov     A,42h
-    subb    A,46h
-    jc      OUTD_CPL
+    mov     A,46h ; TCOUNT
+    subb    A,42h
+    jnc     OUTD_CPL
     ret
 
 OUTD_CPL:
