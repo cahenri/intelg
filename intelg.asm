@@ -232,10 +232,12 @@ FREQ_ADJ:
 ; 37h -> pdone
 ; 38h -> xpress
     mov     A,38h
-    jnb     ACC.6,BTN_DEC_CHECK
-    ; Set pdone
+    jnb     ACC.4,BTN_DEC_CHECK
+    ; Set pdone, clr xpress
+    clr     ACC.4
+    mov     38h,A
     mov     A,37h
-    setb    ACC.6
+    setb    ACC.4
     mov     37h,A
     ; FREQ += 50 if FREQ != 500d
     mov     A,33h
@@ -259,7 +261,9 @@ FREQ_INC:
 BTN_DEC_CHECK:
     mov     A,38h
     jnb     ACC.5,BTN_DUTY_CHECK
-    ; Set pdone
+    ; Set pdone, clr xpress
+    clr     ACC.5
+    mov     38h,A
     mov     A,37h
     setb    ACC.5
     mov     37h,A
@@ -284,10 +288,12 @@ FREQ_DEC:
 BTN_DUTY_CHECK:
 ; 3Dh: Duty mode
     mov     A,38h
-    jnb     ACC.4,FREQ_ADJ_END
-    ; Set pdone
+    jnb     ACC.6,FREQ_ADJ_END
+    ; Set pdone, clr xpress
+    clr     ACC.6
+    mov     38h,A
     mov     A,37h
-    setb    ACC.4
+    setb    ACC.6
     mov     37h,A
     ; duty++
     inc     3Dh
@@ -519,17 +525,10 @@ BIN10_BCD_INIT:
     lcall   BIN10_BCD_RLC
     djnz    R7,BIN10_BCD_INIT
 ;
+    mov     R7,#09h
 BIN10_BCD_LOOP:
-    mov     R7,#0Ah
     lcall   BIN10_BCD_RLC
-    ;
-    mov     A,6Ch
-    rlc     A
-    mov     6Ch,A
-    ;
-    mov     A,6Dh
-    rlc     A
-    mov     6Dh,A
+    lcall   BIN10_BCD_RLC_BCD
     ;
     mov     R0,#6Ch
     lcall   BIN10_BCD_ADJ
@@ -538,6 +537,9 @@ BIN10_BCD_LOOP:
     lcall   BIN10_BCD_ADJ
     ;
     djnz    R7,BIN10_BCD_LOOP
+    ;
+    lcall   BIN10_BCD_RLC
+    lcall   BIN10_BCD_RLC_BCD
     ; Return value in 6Ch and 6Dh
     ret
 ;
@@ -554,9 +556,20 @@ BIN10_BCD_ADJ_SKIP0:
 BIN10_BCD_ADJ_SKIP1:
     ret
 ;
+BIN10_BCD_RLC_BCD:
+    mov     A,6Ch
+    rlc     A
+    mov     6Ch,A
+    ;
+    mov     A,6Dh
+    rlc     A
+    mov     6Dh,A
+    ;
+    ret
+;
 BIN10_BCD_RLC:
-    mov     A,6Ah
     clr     C
+    mov     A,6Ah
     rlc     A
     mov     6Ah,A
     ;
