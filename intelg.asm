@@ -385,14 +385,14 @@ SCAN:
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
 ; PORT1.2: Display2 common (ON when zero)
-    clr     C
-    mov     A,3Bh
-    subb    A,#32h    ; run each 50ms
-    jnc     SCAN_RUN
-    ret
+    ;clr     C
+    ;mov     A,3Bh
+    ;subb    A,#32h    ; run each 50ms
+    ;jnc     SCAN_RUN
+    ;ret
     ;
 SCAN_RUN:
-    mov     3Bh,#00h
+    ;mov     3Bh,#00h
     ; All commons off:
     mov     A,P1
     orl     A,#77h ; include 1's for button inputs
@@ -509,6 +509,8 @@ BIN10_BCD_INIT:
     lcall   BIN10_BCD_RLC
     djnz    R7,BIN10_BCD_INIT
 ;
+    mov     6Ch,#00h
+    mov     6Dh,#00h
     mov     R7,#09h
 BIN10_BCD_LOOP:
     lcall   BIN10_BCD_RLC
