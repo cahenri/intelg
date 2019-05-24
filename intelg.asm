@@ -61,7 +61,7 @@ code at 0040h
 T0_INT:
     mov     TCON,#00h        ; T0_OFF
     mov     TH0,#0FFh
-    mov     TL0,#A2h
+    mov     TL0,#0A2h
     mov     TCON,#10h        ; T0_ON    
     ;
     mov     3Eh,A            ; Save A to W_TEMP
@@ -97,7 +97,7 @@ INIT:
     mov     PSW,#00h
     mov     TCON,#00h        ; T0_OFF
     mov     TH0,#0FFh
-    mov     TL0,#A2h
+    mov     TL0,#0A2h
     mov     TCON,#10h        ; T0_ON    
     lcall   INIT_RAM
     lcall   INIT_7SEG_CONST
