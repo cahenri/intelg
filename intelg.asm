@@ -37,9 +37,9 @@ $include(REG51.inc)
 ;
 ; Hardware mappings:
 ; Crystal used: 16MHz
-; machine-cycle: 12*1/16M = 0.75us
-; 133 * 0.75 ~= 0.1ms
-; 65536 - 133 - 3 - 6 - 1 = 65393 (0xFF71)
+; machine-cycle: 12*1/12M = 1us
+; 100 * 1u ~= 0.1ms
+; 65536 - 100 + 6(movs) = 65442 (0xFFA2)
 ; PORT0.0 ... PORT0.6: display output
 ; PORT1.0: Display0 common (ON when zero)
 ; PORT1.1: Display1 common (ON when zero)
@@ -61,7 +61,7 @@ code at 0040h
 T0_INT:
     mov     TCON,#00h        ; T0_OFF
     mov     TH0,#0FFh
-    mov     TL0,#71h
+    mov     TL0,#A2h
     mov     TCON,#10h        ; T0_ON    
     ;
     mov     3Eh,A            ; Save A to W_TEMP
@@ -97,7 +97,7 @@ INIT:
     mov     PSW,#00h
     mov     TCON,#00h        ; T0_OFF
     mov     TH0,#0FFh
-    mov     TL0,#71h
+    mov     TL0,#A2h
     mov     TCON,#10h        ; T0_ON    
     lcall   INIT_RAM
     lcall   INIT_7SEG_CONST
@@ -131,6 +131,7 @@ OUTD:
     jb      P1.3,OUTD_HIGH
 
     ; if P1.3==0 && TCOUNT>=NCOUNT_LOW then TCOUNT=0, P1.3=1
+    ;clr     C
     mov     A,46h ; TCOUNT
     subb    A,44h
     jnc     OUTD_CPL
@@ -138,6 +139,7 @@ OUTD:
 
     ; if P1.3==1 && TCOUNT>=NCOUNT_HIGH then TCOUNT=0, P1.3=0
 OUTD_HIGH:
+    ;clr     C
     mov     A,46h ; TCOUNT
     subb    A,42h
     jnc     OUTD_CPL
@@ -437,7 +439,8 @@ DIVFREQ:
 ; 6Ah -> DIVD[END] (8bit) (always 1000, but l-rotated to leave 1 in the MSB)
 ; 6Ch -> DIVS[OR] (16bit) - must be set before calling this function
 ; 6Eh -> QUO[CIENT] (16bit)
-    mov     6Ah,#0FAh
+    mov     6Bh,#9Ch
+    mov     6Ah,#40h
     mov     6Eh,#00h
     mov     6Fh,#00h
     mov     R6,#00h         ; DIVID will be rotated here
@@ -462,18 +465,18 @@ DIVFREQ_0:
     rlc     A
     mov     R7,A
     ; SUBB R6,DIVIS(6Ch) if R6>DIVIS
-    mov     A,R7
     clr     C
+    mov     A,R7
     subb    A,6Dh
     jnz     CHECK_IF_GREATER
-    mov     A,R6
     clr     C
+    mov     A,R6
     subb    A,6Ch
 CHECK_IF_GREATER:
     JC      DIVFREQ_RL_0_QUO ; if(C==1): DIVS is greater
     ;
-    mov     A,R6
     clr     C
+    mov     A,R6
     subb    A,6Ch
     mov     R6,A
     ;
